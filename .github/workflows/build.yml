@@ -1,0 +1,37 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore src/WinToolbox/WinToolbox.csproj
+
+      - name: Build
+        run: dotnet build src/WinToolbox/WinToolbox.csproj -c Release --no-restore -p:ApplicationManifest=app.test.manifest
+
+      - name: Publish single file
+        run: >
+          dotnet publish src/WinToolbox/WinToolbox.csproj -c Release -r win-x64
+          --self-contained true -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none -o dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinToolbox
+          path: dist/WinToolbox.exe
+          if-no-files-found: error

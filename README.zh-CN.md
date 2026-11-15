@@ -1,5 +1,9 @@
 # WinToolbox
 
+[![build](https://github.com/shuotian5/win-toolbox/actions/workflows/build.yml/badge.svg)](https://github.com/shuotian5/win-toolbox/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/shuotian5/win-toolbox?color=blue)](https://github.com/shuotian5/win-toolbox/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 面向笔记本的 Windows 工具箱。一个窗口、21 个开关，**每一次改动都能还原**——写入之前先把
 原来的值记下来，还原时写回去，而不是猜一个"默认值"。
 
@@ -78,7 +82,7 @@ WinToolbox 不再走设备层，而是两层依次尝试，**每一步都回读�
 
 ## 下载
 
-到 [releases 页面](../../releases) 下载 `WinToolbox.exe`。单文件、免安装、不需要装 .NET
+到 [releases 页面](https://github.com/shuotian5/win-toolbox/releases/latest) 下载 `WinToolbox.exe`。单文件、免安装、不需要装 .NET
 运行时。双击即可，Windows 会要一次管理员权限——改服务和系统级注册表必须要。
 
 程序没有代码签名，第一次运行 SmartScreen 会警告。这是没买签名证书的代价；不想信这个二进制

@@ -1,5 +1,9 @@
 # WinToolbox
 
+[![build](https://github.com/shuotian5/win-toolbox/actions/workflows/build.yml/badge.svg)](https://github.com/shuotian5/win-toolbox/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/shuotian5/win-toolbox?color=blue)](https://github.com/shuotian5/win-toolbox/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A portable Windows toolbox aimed at laptops. One window, 21 switches, and **every change can
 be undone** — the tool records what it overwrites before it overwrites it.
 
@@ -84,7 +88,7 @@ default — that is the difference between "undo" and "get approximately close".
 
 ## Download
 
-Grab `WinToolbox.exe` from the [releases page](../../releases). It is a single self-contained
+Grab `WinToolbox.exe` from the [releases page](https://github.com/shuotian5/win-toolbox/releases/latest). It is a single self-contained
 file, no installer, no .NET runtime needed. Double-click it; Windows will ask for administrator
 rights once, because changing services and machine-wide keys requires it.
 
