@@ -21,6 +21,9 @@ internal sealed class HibernateTweak : Core.Tweak
     public override string? Warning => Core.Loc.T(
         "关掉后不能再用「休眠」，睡眠不受影响。", "Sleep still works; only hibernate is gone.");
 
+    /// <summary>Deletes hiberfil.sys — not something a self-test should round-trip.</summary>
+    public override bool SafeToSelfTest => false;
+
     public override Core.TweakState Query()
     {
         bool enabled = Core.Shell.HibernationEnabled();
@@ -60,6 +63,9 @@ internal sealed class PowerPlanTweak : Core.Tweak
     public override string Id => "power-plan";
     public override string Category => Core.Categories.Performance;
 
+    /// <summary>Would fight G-Helper over the active plan while the test runs.</summary>
+    public override bool SafeToSelfTest => false;
+
     public override string Title => Core.Loc.T("高性能电源计划", "High performance power plan");
 
     public override string Description => Core.Loc.T(
@@ -68,6 +74,24 @@ internal sealed class PowerPlanTweak : Core.Tweak
 
     public override Core.TweakState Query()
     {
+        var schemes = Core.Shell.ListSchemes();
+        if (schemes.Count == 0)
+        {
+            Hint = null;
+            return Core.TweakState.Unavailable;
+        }
+
+        // Laptops with Modern Standby hide the stock "High performance" plan, and ASUS models
+        // replace the list with their own Balanced / Performance / Silent / Turbo set. Without
+        // this check the switch would show "on" while /setactive was failing behind it.
+        if (!schemes.Contains(Core.Shell.HighPerformanceScheme))
+        {
+            Hint = Core.Loc.T(
+                "这台机器没有独立的高性能计划（现代待机机型会隐藏它）。性能模式请用 G-Helper 或奥创切换。",
+                "This machine has no separate high-performance plan (hidden on Modern Standby models). Use G-Helper or Armoury Crate for performance modes.");
+            return Core.TweakState.Unavailable;
+        }
+
         string? active = Core.Shell.ActivePowerScheme();
         if (active is null)
         {
@@ -75,7 +99,7 @@ internal sealed class PowerPlanTweak : Core.Tweak
             return Core.TweakState.Unavailable;
         }
 
-        bool high = active == Core.Shell.HighPerformanceScheme;
+        bool high = string.Equals(active, Core.Shell.HighPerformanceScheme, StringComparison.OrdinalIgnoreCase);
         Hint = high
             ? Core.Loc.T("当前：高性能", "Current: high performance")
             : Core.Loc.T("当前：平衡", "Current: balanced");
@@ -87,8 +111,18 @@ internal sealed class PowerPlanTweak : Core.Tweak
     {
         string target = enable ? Core.Shell.HighPerformanceScheme : Core.Shell.BalancedScheme;
 
+        if (!Core.Shell.ListSchemes().Contains(target))
+            return Core.TweakResult.Fail(Core.Loc.T(
+                "这台机器上没有这个电源计划，没有做任何修改。",
+                "That power plan does not exist on this machine — nothing was changed."));
+
         if (!Core.Shell.SetPowerScheme(target))
             return Core.TweakResult.Fail(Core.Loc.T("切换电源计划失败。", "Could not switch the power plan."));
+
+        // powercfg returns 0 more often than it should; confirm by reading the active scheme.
+        string? active = Core.Shell.ActivePowerScheme();
+        if (!string.Equals(active, target, StringComparison.OrdinalIgnoreCase))
+            return Core.TweakResult.Fail(Core.Loc.T("电源计划没有切换成功。", "The power plan did not switch."));
 
         return Core.TweakResult.Success(enable
             ? Core.Loc.T("已切换到高性能", "Switched to high performance")
@@ -104,6 +138,9 @@ internal sealed class TempCleanTweak : Core.Tweak
 {
     public override string Id => "temp-clean";
     public override string Category => Core.Categories.Performance;
+
+    /// <summary>Deletes files — an action card, so a round-trip test means nothing here.</summary>
+    public override bool SafeToSelfTest => false;
 
     public override Core.TweakKind Kind => Core.TweakKind.Action;
 

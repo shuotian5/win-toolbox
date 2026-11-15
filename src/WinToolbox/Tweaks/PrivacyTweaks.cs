@@ -24,14 +24,29 @@ internal sealed class TelemetryTweak : Core.RegistryTweak
     {
         new Core.RegValue(RegistryHive.LocalMachine, Policy, "AllowTelemetry", 0, null),
         new Core.RegValue(RegistryHive.LocalMachine, Policy, "AllowDeviceNameInTelemetry", 0, null),
-        new Core.RegValue(RegistryHive.LocalMachine, Policy, "MaxTelemetryAllowed", 0, null),
     };
 
-    protected override void AfterApply(bool enable)
+    /// <summary>Touches the DiagTrack service — never flipped by the automated self-test.</summary>
+    public override bool SafeToSelfTest => false;
+
+    protected override bool AfterApply(bool enable, out string? note)
     {
-        if (!Core.Services.Exists("DiagTrack")) return;
-        if (enable) Core.Services.DisableWithBackup("DiagTrack");
-        else Core.Services.RestoreFromBackup("DiagTrack");
+        note = null;
+        if (!Core.Services.Exists("DiagTrack")) return true;
+
+        if (enable)
+        {
+            Core.Services.DisableWithBackup("DiagTrack");
+            if (Core.Services.GetStartType("DiagTrack") != Core.Services.StartDisabled)
+                note = Core.Loc.T("DiagTrack 受系统保护未能禁用，策略层面仍然生效。",
+                                  "DiagTrack is protected and could not be disabled; the policy still applies.");
+        }
+        else
+        {
+            Core.Services.RestoreFromBackup("DiagTrack");
+        }
+
+        return true;
     }
 }
 
@@ -55,6 +70,22 @@ internal sealed class CopilotTweak : Core.RegistryTweak
             @"Software\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1, null),
         new Core.RegValue(RegistryHive.CurrentUser, Advanced, "ShowCopilotButton", 0, 1),
     };
+
+    /// <summary>The taskbar button only disappears once Explorer re-reads its settings.</summary>
+    public override bool NeedsExplorerRefresh => true;
+
+    public override Core.TweakState Query()
+    {
+        var state = base.Query();
+
+        // 24H2 turned Copilot into a packaged app and the policy stopped being honoured.
+        // Saying so beats letting people flip a switch that cannot do anything.
+        if (Environment.OSVersion.Version.Build >= 26100)
+            Hint = Core.Loc.T("24H2 起 Copilot 是独立应用，该策略可能已不生效",
+                              "Since 24H2 Copilot is a separate app; this policy may no longer apply");
+
+        return state;
+    }
 }
 
 /// <summary>The weather/feed widget on the taskbar — a surprising amount of background work.</summary>
@@ -77,6 +108,8 @@ internal sealed class WidgetsTweak : Core.RegistryTweak
             @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0, null),
         new Core.RegValue(RegistryHive.CurrentUser, Advanced, "TaskbarDa", 0, 1),
     };
+
+    public override bool NeedsExplorerRefresh => true;
 }
 
 /// <summary>
@@ -139,4 +172,7 @@ internal sealed class WebSearchTweak : Core.RegistryTweak
         new Core.RegValue(RegistryHive.LocalMachine, SearchPolicy, "DisableWebSearch", 1, null),
         new Core.RegValue(RegistryHive.LocalMachine, SearchPolicy, "ConnectedSearchUseWeb", 0, null),
     };
+
+    /// <summary>Search reads the policy when its process starts, so Explorer has to reload.</summary>
+    public override bool NeedsExplorerRefresh => true;
 }

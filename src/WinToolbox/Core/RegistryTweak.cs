@@ -74,8 +74,19 @@ public abstract class RegistryTweak : Tweak
 {
     protected abstract IReadOnlyList<RegValue> Values { get; }
 
-    /// <summary>Optional side effect that is not registry based (service stop, shell refresh).</summary>
-    protected virtual void AfterApply(bool enable) { }
+    /// <summary>Same list, exposed to the self-test so it can snapshot and restore.</summary>
+    internal IReadOnlyList<RegValue> RawValues => Values;
+
+    /// <summary>
+    /// Optional side effect that is not registry based (push the value into the running
+    /// session, stop a service, nudge the shell). Returning <c>false</c> means the change did
+    /// not really take effect — the card then reports a failure instead of a green tick.
+    /// </summary>
+    protected virtual bool AfterApply(bool enable, out string? note)
+    {
+        note = null;
+        return true;
+    }
 
     public override TweakState Query()
     {
@@ -129,11 +140,19 @@ public abstract class RegistryTweak : Tweak
         {
             try
             {
-                if (!enable && v.IsMissing() && v.OffValue is null) continue;
+                // Nothing to undo for a value that is already absent.
+                if (!enable && v.IsMissing() && v.OffValue is null) { changed++; continue; }
 
                 Backup.Remember(v.Hive, v.Path, v.Name);
-                v.Write(enable ? v.OnValue : v.OffValue);
-                changed++;
+
+                object? wanted = enable ? v.OnValue : v.OffValue;
+                v.Write(wanted);
+
+                // Read the value back. A write that is silently dropped (wrong hive, key
+                // owned by TrustedInstaller, policy-locked path) must not be reported as a
+                // success — that is the difference between a switch and a lie.
+                if (RegValue.Matches(v.Read(), wanted)) changed++;
+                else failures.Add($"{v.Name}: {Loc.T("写入未生效", "write did not stick")}");
             }
             catch (Exception ex)
             {
@@ -141,13 +160,24 @@ public abstract class RegistryTweak : Tweak
             }
         }
 
-        try { AfterApply(enable); } catch { }
+        bool sideOk;
+        string? note;
+        try { sideOk = AfterApply(enable, out note); }
+        catch (Exception ex) { sideOk = false; note = ex.Message; }
 
         if (failures.Count > 0)
             return TweakResult.Fail(string.Join("; ", failures.Take(2)));
 
-        return TweakResult.Success(enable
+        if (!sideOk)
+            return TweakResult.Fail(note ?? Loc.T("设置没有被系统接受", "Windows refused the change"));
+
+        string message = enable
             ? Loc.T($"已应用（{changed} 项）", $"Applied ({changed} value(s))")
-            : Loc.T($"已还原（{changed} 项）", $"Reverted ({changed} value(s))"));
+            : Loc.T($"已还原（{changed} 项）", $"Reverted ({changed} value(s))");
+
+        if (!string.IsNullOrEmpty(note))
+            message += " · " + note;
+
+        return TweakResult.Success(message);
     });
 }

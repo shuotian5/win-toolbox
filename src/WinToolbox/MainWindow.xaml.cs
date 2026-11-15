@@ -60,7 +60,73 @@ public partial class MainWindow : Window
         }
 
         Journal.Written += OnJournalWritten;
+        Tweak.Applied += OnTweakApplied;
         Loaded += async (_, _) => await OnLoadedAsync();
+    }
+
+    /// <summary>
+    /// Cards like the context menu, taskbar alignment and Copilot button are written to the
+    /// registry but stay invisible until Explorer re-reads its settings. Offer the restart
+    /// instead of leaving the user staring at a switch that "did nothing".
+    /// </summary>
+    private async void OnTweakApplied(Tweak tweak)
+    {
+        if (!tweak.NeedsExplorerRefresh) return;
+
+        string question = Loc.T(
+            $"「{tweak.Title}」已经写入，但要重启资源管理器才能看到效果。\n\n" +
+            "现在重启吗？任务栏会闪一下，已经打开的文件夹窗口会被关闭。\n\n" +
+            "选「取消」的话，注销或下次登录时也会自动生效。",
+            $"\"{tweak.Title}\" is saved, but Explorer has to reload before you can see it.\n\n" +
+            "Restart now? The taskbar blinks once and open folder windows close.\n\n" +
+            "If you cancel, it takes effect at your next sign-in anyway.");
+
+        var answer = MessageBox.Show(this, question, "WinToolbox",
+            MessageBoxButton.OKCancel, MessageBoxImage.Question);
+
+        if (answer != MessageBoxResult.OK) return;
+
+        var (ok, message) = await Task.Run(Core.Shell.RestartExplorer);
+        Journal.Write(Loc.T($"重启资源管理器：{message}", $"Explorer: {message}"), ok);
+    }
+
+    private async void SelfTest_Click(object sender, RoutedEventArgs e)
+    {
+        SelfTestButton.IsEnabled = false;
+        Journal.Write(Loc.T("正在逐项验证每个开关…", "Verifying every card…"), true);
+
+        string path = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "WinToolbox-selftest.txt");
+
+        try
+        {
+            var (report, passed, failed, skipped) = await Task.Run(() =>
+            {
+                string text = Core.SelfTest.Run(_all, out int p, out int f, out int s);
+                return (text, p, f, s);
+            });
+
+            System.IO.File.WriteAllText(path, report, new System.Text.UTF8Encoding(true));
+            await RefreshAllAsync();
+
+            string summary = Loc.T(
+                $"通过 {passed} 项，失败 {failed} 项，跳过 {skipped} 项。\n\n报告已保存到桌面：\n{path}",
+                $"Passed {passed}, failed {failed}, skipped {skipped}.\n\nReport saved to your desktop:\n{path}");
+
+            MessageBox.Show(this, summary, "WinToolbox",
+                MessageBoxButton.OK, failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+
+            Journal.Write(Loc.T($"体检完成：{passed} 通过 / {failed} 失败", $"Check-up: {passed} passed / {failed} failed"),
+                          failed == 0);
+        }
+        catch (Exception ex)
+        {
+            Journal.Write(ex.Message, false);
+        }
+        finally
+        {
+            SelfTestButton.IsEnabled = true;
+        }
     }
 
     private async Task OnLoadedAsync()
@@ -92,6 +158,10 @@ public partial class MainWindow : Window
         Title = "WinToolbox";
         TaglineText.Text = Loc.T("面向笔记本的 Windows 工具箱", "A Windows toolbox for laptops");
         RestoreButton.Content = Loc.T("全部还原", "Restore all");
+        SelfTestButton.Content = Loc.T("体检", "Check-up");
+        SelfTestButton.ToolTip = Loc.T(
+            "逐项验证每个开关是否真的写进去了：开启→读回→关闭→读回→还原原值。",
+            "Verifies every card really writes: on → read back → off → read back → restore.");
         ReloadButton.Content = Loc.T("刷新状态", "Refresh");
         SearchBox.ToolTip = Loc.T("搜索功能", "Search features");
         SearchPlaceholder.Text = Loc.T("搜索功能…", "Search…");
@@ -112,7 +182,7 @@ public partial class MainWindow : Window
             ? new SolidColorBrush(Color.FromRgb(0x7F, 0xA6, 0xE8))
             : new SolidColorBrush(Color.FromRgb(0xE8, 0xA0, 0x7F));
 
-        VersionText.Text = "v1.0.0 · portable";
+        VersionText.Text = "v1.0.1 · portable";
     }
 
     private void BuildNav()

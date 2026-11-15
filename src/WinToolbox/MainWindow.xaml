@@ -142,6 +142,8 @@
                     </Grid>
                     <Button x:Name="RestoreButton" Content="全部还原" Style="{StaticResource GhostButtonStyle}"
                             Height="36" Padding="16,0" Margin="10,0,0,0" Click="RestoreAll_Click" />
+                    <Button x:Name="SelfTestButton" Content="体检" Style="{StaticResource GhostButtonStyle}"
+                            Height="36" Padding="16,0" Margin="8,0,0,0" Click="SelfTest_Click" />
                 </StackPanel>
             </Grid>
 

@@ -28,6 +28,9 @@ internal sealed class InternalKeyboardTweak : Core.Tweak
 
     public override bool NeedsReboot => true;
 
+    /// <summary>Never flipped by the automated self-test — it would lock the keyboard mid-run.</summary>
+    public override bool SafeToSelfTest => false;
+
     public override Core.TweakState Query()
     {
         var kb = Core.InternalKeyboard.FindAll().FirstOrDefault();
@@ -180,7 +183,6 @@ internal sealed class AsusServicesTweak : Core.Tweak
             Hint = Core.Loc.T("这台机器上没有华硕服务", "No ASUS services on this machine");
             return Core.TweakState.Unavailable;
         }
-
         int running = present.Count(Core.Services.IsRunning);
         Hint = Core.Loc.T($"{present.Count} 个服务，{running} 个在运行",
                           $"{present.Count} services, {running} running");
@@ -188,6 +190,9 @@ internal sealed class AsusServicesTweak : Core.Tweak
         if (running == 0) return Core.TweakState.On;
         return running == present.Count ? Core.TweakState.Off : Core.TweakState.Mixed;
     }
+
+    /// <summary>Stops real services — never flipped by the automated self-test.</summary>
+    public override bool SafeToSelfTest => false;
 
     public override Task<Core.TweakResult> ApplyAsync(bool enable) => Task.Run(() =>
     {
@@ -225,6 +230,8 @@ internal sealed class AsusServicesTweak : Core.Tweak
 /// <summary>Windows nags about Sticky Keys mid-game; this turns the shortcut off.</summary>
 internal sealed class StickyKeysTweak : Core.RegistryTweak
 {
+    private const string Path = @"Control Panel\Accessibility\StickyKeys";
+
     public override string Id => "sticky-keys";
     public override string Category => Core.Categories.Hardware;
 
@@ -236,9 +243,48 @@ internal sealed class StickyKeysTweak : Core.RegistryTweak
 
     protected override IReadOnlyList<Core.RegValue> Values => new[]
     {
-        new Core.RegValue(RegistryHive.CurrentUser, @"Control Panel\Accessibility\StickyKeys", "Flags",
+        new Core.RegValue(RegistryHive.CurrentUser, Path, "Flags",
             "506", "510", RegistryValueKind.String),
     };
+
+    /// <summary>
+    /// Test the SKF_HOTKEYACTIVE bit instead of the whole value. The flags word carries a
+    /// dozen unrelated switches, and hard-coding 506/510 would report "partial" for anyone
+    /// who has, say, the On-Screen Keyboard shortcut configured.
+    /// </summary>
+    public override Core.TweakState Query()
+    {
+        int flags = Core.Accessibility.ReadStickyFlags();
+        Hint = (flags & Core.Native.SKF_HOTKEYACTIVE) == 0
+            ? (Core.Accessibility.StickyShortcutLive() == false
+                ? Core.Loc.T("已关闭，当前会话已生效", "Off and already in effect")
+                : Core.Loc.T("已关闭，注销后生效", "Off — takes effect after signing out"))
+            : Core.Loc.T("连按五次 Shift 仍会弹窗", "Shift x5 still opens the dialog");
+
+        return (flags & Core.Native.SKF_HOTKEYACTIVE) == 0 ? Core.TweakState.On : Core.TweakState.Off;
+    }
+
+    protected override bool AfterApply(bool enable, out string? note)
+    {
+        // Writing HKCU is only half the job: the running session keeps its own copy until
+        // sign-out. This pushes the new flags into the session so Shift x5 stops now.
+        if (!Core.Accessibility.SetStickyHotkey(!enable, out string? error))
+        {
+            note = Core.Loc.T(
+                $"注册表已写入，但当前会话没有接受（{error}），注销后才生效。",
+                $"Written to the registry, but the running session refused it ({error}); it applies after signing out.");
+            return true;
+        }
+
+        note = null;
+        return true;
+    }
+
+    internal override void ResyncSession()
+    {
+        int flags = Core.Accessibility.ReadStickyFlags();
+        Core.Accessibility.SetStickyHotkey((flags & Core.Native.SKF_HOTKEYACTIVE) != 0, out _);
+    }
 }
 
 /// <summary>Turn off "enhance pointer precision" — the pointer then moves 1:1 with the mouse.</summary>
@@ -260,10 +306,34 @@ internal sealed class MouseAccelTweak : Core.RegistryTweak
         new Core.RegValue(RegistryHive.CurrentUser, @"Control Panel\Mouse", "MouseThreshold2", "0", "10", RegistryValueKind.String),
     };
 
-    protected override void AfterApply(bool enable)
+    public override Core.TweakState Query()
     {
-        // Windows reads these at logon for the pointer curve; broadcast so the new setting
-        // is picked up by the running session where possible.
-        Core.Native.RefreshShell();
+        var live = Core.Accessibility.ReadMouseLive();
+        Hint = live.Accel == 0
+            ? Core.Loc.T("已关闭，当前会话已生效", "Off and already in effect")
+            : Core.Loc.T("曲线加速仍在生效", "Acceleration curve is still active");
+        return live.Accel == 0 ? Core.TweakState.On : Core.TweakState.Off;
+    }
+
+    protected override bool AfterApply(bool enable, out string? note)
+    {
+        // The pointer curve is held in the session's parameter block; the registry value only
+        // seeds it at logon. SPI_SETMOUSE is what actually changes the feel right now.
+        if (!Core.Accessibility.SetMouseAcceleration(!enable, out string? error))
+        {
+            note = Core.Loc.T(
+                $"注册表已写入，但当前会话没有接受（{error}），注销后才生效。",
+                $"Written to the registry, but the session refused it ({error}); it applies after signing out.");
+            return true;
+        }
+
+        note = null;
+        return true;
+    }
+
+    internal override void ResyncSession()
+    {
+        bool accel = Values[0].Read()?.ToString() != "0";
+        Core.Accessibility.SetMouseAcceleration(accel, out _);
     }
 }

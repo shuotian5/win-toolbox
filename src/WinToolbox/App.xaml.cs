@@ -25,6 +25,9 @@ public partial class App : Application
 
     public static bool ApplyEnable { get; private set; }
 
+    /// <summary><c>--selftest &lt;file.txt&gt;</c> — round-trip every card and report.</summary>
+    public static string? SelfTestTarget { get; private set; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -47,11 +50,20 @@ public partial class App : Application
                     ApplyId = args[++i];
                     ApplyEnable = args[++i].Equals("on", StringComparison.OrdinalIgnoreCase);
                     break;
+                case "--selftest" when i + 1 < args.Length:
+                    SelfTestTarget = args[++i];
+                    break;
                 case "--help" or "-h":
                     WriteHelp();
                     Shutdown(0);
                     return;
             }
+        }
+
+        if (SelfTestTarget is not null)
+        {
+            Shutdown(RunSelfTest(SelfTestTarget));
+            return;
         }
 
         if (ApplyId is not null)
@@ -101,9 +113,24 @@ public partial class App : Application
         Console.WriteLine("  WinToolbox.exe                     open the window");
         Console.WriteLine("  WinToolbox.exe --apply <id> on|off flip one card, no UI");
         Console.WriteLine("  WinToolbox.exe --dump <file.txt>   write a diagnostic report");
+        Console.WriteLine("  WinToolbox.exe --selftest <f.txt>  verify every card really writes");
         Console.WriteLine("  WinToolbox.exe --render <file.png> save a screenshot of the window");
         Console.WriteLine();
         Console.WriteLine("  Exit codes: 0 ok / 1 failed / 2 unknown id");
+    }
+
+    private static int RunSelfTest(string path)
+    {
+        AttachToParentConsole();
+
+        string report = Core.SelfTest.Run(TweakCatalog.Create(), out int passed, out int failed, out int skipped);
+
+        try { File.WriteAllText(path, report, new UTF8Encoding(true)); }
+        catch (Exception ex) { Console.WriteLine(ex.Message); return 1; }
+
+        Console.Write(report);
+        Console.WriteLine($"report written to {path}");
+        return failed == 0 ? 0 : 1;
     }
 
     private static int RunApply(string id)

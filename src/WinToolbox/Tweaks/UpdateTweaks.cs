@@ -31,20 +31,44 @@ internal sealed class WindowsUpdateTweak : Core.RegistryTweak
 
     private static readonly string[] UpdateServices = { "wuauserv", "UsoSvc", "WaaSMedicSvc", "DoSvc" };
 
+    /// <summary>Touches update services — never flipped by the automated self-test.</summary>
+    public override bool SafeToSelfTest => false;
+
     protected override IReadOnlyList<Core.RegValue> Values => new[]
     {
         new Core.RegValue(RegistryHive.LocalMachine, PolicyAu, "NoAutoUpdate", 1, null),
         new Core.RegValue(RegistryHive.LocalMachine, PolicyAu, "AUOptions", 2, null),
     };
 
-    protected override void AfterApply(bool enable)
+    protected override bool AfterApply(bool enable, out string? note)
     {
+        note = null;
+        var refused = new List<string>();
+
         foreach (var name in UpdateServices)
         {
             if (!Core.Services.Exists(name)) continue;
-            if (enable) Core.Services.DisableWithBackup(name);
-            else Core.Services.RestoreFromBackup(name);
+            if (enable)
+            {
+                Core.Services.DisableWithBackup(name);
+                // wuauserv / UsoSvc / WaaSMedicSvc are partly owned by TrustedInstaller, so a
+                // plain admin token can be refused. Say so instead of claiming four services
+                // were stopped when two were not.
+                if (Core.Services.GetStartType(name) != Core.Services.StartDisabled)
+                    refused.Add(name);
+            }
+            else
+            {
+                Core.Services.RestoreFromBackup(name);
+            }
         }
+
+        if (refused.Count > 0)
+            note = Core.Loc.T(
+                $"{refused.Count} 个服务受系统保护未能停用（{string.Join(", ", refused)}），策略层面仍然生效。",
+                $"{refused.Count} protected service(s) could not be stopped ({string.Join(", ", refused)}); the policy still applies.");
+
+        return true;
     }
 }
 

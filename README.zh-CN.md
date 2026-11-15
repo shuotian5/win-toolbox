@@ -92,6 +92,7 @@ WinToolbox 不再走设备层，而是两层依次尝试，**每一步都回读�
 WinToolbox.exe                                打开窗口
 WinToolbox.exe --apply <id> on|off            直接切换某一项
 WinToolbox.exe --dump report.txt              生成诊断报告
+WinToolbox.exe --selftest check.txt           逐项验证每个开关真的生效
 WinToolbox.exe --render shot.png              保存界面截图
 WinToolbox.exe --help                         查看参数
 
@@ -105,6 +106,25 @@ WinToolbox.exe --help                         查看参数
 WinToolbox.exe --apply wu-disable on
 WinToolbox.exe --apply internal-keyboard off
 ```
+
+### 体检（`--selftest`）
+
+界面右上角的「体检」按钮，和 `--selftest` 是同一件事：对每一张注册表卡片做一次
+**开启 → 读回 → 关闭 → 读回 → 还原原值**，只有 Windows 真存下了那个值才算通过。
+
+```text
+[appearance] appearance-dark  —  深色模式
+      通过 pass：2 个值写入并读回一致，已还原
+[privacy] privacy-copilot  —  关闭 Copilot
+      失败 FAIL：开启被拒绝：Access to the registry key ... is denied.
+```
+
+它跳过三类卡片并说明原因：会改硬件或服务的（内置键盘、华硕服务、Windows 更新、
+休眠、电源计划）、纯动作型（清理临时文件）、以及非管理员运行时的 HKLM 项目。
+报告开头会写明本次是否具备管理员权限，所以「跳过」和「失败」不会混在一起。
+
+这个自检是刻意设计成这样的：一个开关只要没有真的写进去，就必须当场报错，而不是等
+用户一周后才发现「开了没用」。
 
 ## 编译
 

@@ -56,6 +56,26 @@ internal static class Shell
         return code == 0;
     }
 
+    /// <summary>
+    /// GUIDs of every power plan this machine actually has. Laptops with Modern Standby hide
+    /// the stock "High performance" plan, and ASUS models replace the whole list with their
+    /// own Balanced / Performance / Silent / Turbo set — so the fixed GUID cannot be assumed
+    /// to exist. Without this check the switch would flip to "on" while <c>/setactive</c> was
+    /// silently failing.
+    /// </summary>
+    public static HashSet<string> ListSchemes()
+    {
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var (code, output) = Run("powercfg", "/list");
+        if (code != 0) return found;
+
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                     output, @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"))
+            found.Add(m.Value.ToLowerInvariant());
+
+        return found;
+    }
+
     // ------------------------------------------------------------ hibernation
 
     public static string HibernationFile => Path.Combine(
@@ -81,6 +101,53 @@ internal static class Shell
     {
         var (code, _) = Run("powercfg", enable ? "/h on" : "/h off");
         return code == 0;
+    }
+
+    // ---------------------------------------------------------------- explorer
+
+    /// <summary>
+    /// <c>AutoRestartShell</c> tells Winlogon to respawn the shell in the logged-on user's
+    /// context. That is the only clean way to restart Explorer from an elevated process:
+    /// launching explorer.exe ourselves would inherit our elevation and break drag-and-drop
+    /// into normal apps until the next sign-in.
+    /// </summary>
+    private static bool AutoRestartShell()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon");
+            return key?.GetValue("AutoRestartShell") is not int v || v != 0;
+        }
+        catch { return true; }
+    }
+
+    public static (bool Ok, string Message) RestartExplorer()
+    {
+        if (!AutoRestartShell())
+            return (false, "AutoRestartShell 已关闭，请注销后重新登录以应用更改。");
+
+        try
+        {
+            foreach (var p in Process.GetProcessesByName("explorer"))
+            {
+                try { p.Kill(); p.WaitForExit(4000); } catch { }
+            }
+        }
+        catch { }
+
+        for (int i = 0; i < 30; i++)
+        {
+            Thread.Sleep(300);
+            try
+            {
+                if (Process.GetProcessesByName("explorer").Length > 0)
+                    return (true, "资源管理器已重启");
+            }
+            catch { }
+        }
+
+        return (false, "资源管理器没有自动恢复，请按 Ctrl+Shift+Esc → 文件 → 运行新任务 → 输入 explorer 回车。");
     }
 
     // ---------------------------------------------------------------- temp files

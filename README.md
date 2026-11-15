@@ -101,6 +101,7 @@ batch:
 WinToolbox.exe                                open the window
 WinToolbox.exe --apply <id> on|off            flip one card, no UI
 WinToolbox.exe --dump report.txt              write a diagnostic report
+WinToolbox.exe --selftest check.txt           verify every card really applies
 WinToolbox.exe --render shot.png              save a screenshot of the window
 WinToolbox.exe --help                         list options
 
@@ -114,6 +115,27 @@ Card ids are listed by `--dump`; they are also the left-hand column of the table
 WinToolbox.exe --apply wu-disable on
 WinToolbox.exe --apply internal-keyboard off
 ```
+
+### Check-up (`--selftest`)
+
+The **Check-up** button in the header runs the same thing: for every registry-backed card it
+does *on → read back → off → read back → restore the original values*, and only passes when
+the value Windows actually stores changed.
+
+```text
+[appearance] appearance-dark  —  Dark mode
+      pass：2 values written and read back, original restored
+[privacy] privacy-copilot  —  Turn off Copilot
+      失败 FAIL：on refused: Access to the registry key ... is denied.
+```
+
+It skips, with a reason, three groups: cards that touch hardware or services (built-in
+keyboard, ASUS services, Windows Update, hibernation, power plan), action cards (temp
+cleanup), and HKLM items when the process is not elevated. The header records whether the
+run had administrator rights, so "skipped" is never confused with "broken".
+
+That is deliberate: a switch that did not write anything has to fail loudly at once, instead
+of being discovered a week later as "I turned it on and nothing happened".
 
 ## Build
 

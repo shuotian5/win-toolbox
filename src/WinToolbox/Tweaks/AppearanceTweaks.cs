@@ -28,7 +28,9 @@ internal sealed class ClassicContextMenuTweak : Core.RegistryTweak
 
     // Explorer is deliberately NOT restarted here: this process runs elevated, and a shell
     // started from an elevated process stays elevated, which breaks drag-and-drop into
-    // normal apps. Signing out is the clean way to apply it.
+    // normal apps. The window offers the restart to the user instead.
+
+    public override bool NeedsExplorerRefresh => true;
 
     public override Core.TweakState Query()
     {
@@ -56,7 +58,14 @@ internal sealed class ShowExtensionsTweak : Core.RegistryTweak
         new Core.RegValue(RegistryHive.CurrentUser, Advanced, "HideFileExt", 0, 1),
     };
 
-    protected override void AfterApply(bool enable) => Core.Native.RefreshShell();
+    public override bool NeedsExplorerRefresh => true;
+
+    protected override bool AfterApply(bool enable, out string? note)
+    {
+        note = null;
+        Core.Native.RefreshShell();
+        return true;
+    }
 }
 
 /// <summary>Windows 11 only: move the taskbar icons back to the left.</summary>
@@ -77,6 +86,8 @@ internal sealed class TaskbarLeftTweak : Core.RegistryTweak
     {
         new Core.RegValue(RegistryHive.CurrentUser, Advanced, "TaskbarAl", 0, 1),
     };
+
+    public override bool NeedsExplorerRefresh => true;
 
     public override Core.TweakState Query()
     {
@@ -104,7 +115,14 @@ internal sealed class DarkModeTweak : Core.RegistryTweak
         new Core.RegValue(RegistryHive.CurrentUser, Personalize, "SystemUsesLightTheme", 0, 1),
     };
 
-    protected override void AfterApply(bool enable) => Core.Native.RefreshShell();
+    protected override bool AfterApply(bool enable, out string? note)
+    {
+        note = null;
+        // Theme switching listens for this specific message; SHChangeNotify is ignored.
+        Core.Native.BroadcastSettingChange("ImmersiveColorSet");
+        Core.Native.RefreshShell();
+        return true;
+    }
 }
 
 /// <summary>Remove the ~400 ms pause hovering a menu item introduces before it opens.</summary>

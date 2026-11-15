@@ -115,4 +115,63 @@ internal static class Native
 
     /// <summary>Broadcast a settings change so Explorer picks it up without a logon cycle.</summary>
     internal static void RefreshShell() => SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam,
+                                                    uint fuFlags, uint uTimeout, out UIntPtr result);
+
+    private const uint WM_SETTINGCHANGE = 0x001A;
+    private const uint SMTO_ABORTIFHUNG = 0x0002;
+    private static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+
+    /// <summary>
+    /// Tell every top-level window that a system setting changed. Theme switching in
+    /// particular reacts to this and to nothing else — SHChangeNotify alone leaves the
+    /// dark-mode toggle looking applied while the UI stays light.
+    /// </summary>
+    internal static void BroadcastSettingChange(string area)
+    {
+        try { SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, UIntPtr.Zero, area, SMTO_ABORTIFHUNG, 1200, out _); }
+        catch { }
+    }
+
+    // ---------------------------------------------------------------- user32
+    //
+    // Accessibility shortcut keys and mouse acceleration are NOT read from the registry on
+    // demand. Windows copies them into the session's parameter block at logon, so writing
+    // HKCU\Control Panel\... only takes effect the next time you sign in — which is exactly
+    // why "the switch is on but Shift still pops the dialog" happens. These settings have
+    // to be pushed through SystemParametersInfo to land immediately.
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct STICKYKEYS
+    {
+        public int cbSize;
+        public int dwFlags;
+    }
+
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoSticky(uint uiAction, uint uiParam, ref STICKYKEYS pvParam, uint fWinIni);
+
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoMouse(uint uiAction, uint uiParam, [In, Out] int[] pvParam, uint fWinIni);
+
+    internal const uint SPI_GETMOUSE = 0x0003;
+    internal const uint SPI_SETMOUSE = 0x0004;
+
+    // winuser.h: SPI_GETSTICKYKEYS = 58, SPI_SETSTICKYKEYS = 59. Note that 0x36/0x37 are
+    // SPI_GETMOUSEKEYS/SPI_SETMOUSEKEYS — passing those with a STICKYKEYS buffer lets Windows
+    // write a 28-byte MOUSEKEYS over an 8-byte struct, which corrupts the stack.
+    internal const uint SPI_GETSTICKYKEYS = 0x003A;
+    internal const uint SPI_SETSTICKYKEYS = 0x003B;
+
+    internal const uint SPIF_UPDATEINIFILE = 0x01;
+    internal const uint SPIF_SENDCHANGE = 0x02;
+
+    /// <summary>SKF_HOTKEYACTIVE — the "tap Shift five times" shortcut.</summary>
+    internal const int SKF_HOTKEYACTIVE = 0x00000004;
+    /// <summary>SKF_CONFIRMHOTKEY — the confirmation dialog itself.</summary>
+    internal const int SKF_CONFIRMHOTKEY = 0x00000008;
 }

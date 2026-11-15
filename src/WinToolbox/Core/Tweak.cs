@@ -71,6 +71,19 @@ public abstract class Tweak : INotifyPropertyChanged
     /// <summary>Marks cards whose effect only lands after a restart.</summary>
     public virtual bool NeedsReboot => false;
 
+    /// <summary>
+    /// True when the change is written but Explorer has to restart before it becomes
+    /// visible — context menu, taskbar position, taskbar buttons, search suggestions.
+    /// The window asks the user before restarting anything.
+    /// </summary>
+    public virtual bool NeedsExplorerRefresh => false;
+
+    /// <summary>
+    /// False for cards that must not be flipped by the automated self-test: disabling the
+    /// keyboard, deleting hiberfil.sys, wiping temp folders, stopping services.
+    /// </summary>
+    public virtual bool SafeToSelfTest => true;
+
     // -------------------------------------------------------------------- state
 
     private TweakState _state = TweakState.Off;
@@ -154,6 +167,13 @@ public abstract class Tweak : INotifyPropertyChanged
 
     public abstract Task<TweakResult> ApplyAsync(bool enable);
 
+    /// <summary>
+    /// Push the current registry state back into the running session. Only the two tweaks
+    /// that go through SystemParametersInfo need this — after the self-test restores raw
+    /// values, the session would otherwise keep whatever the test left behind.
+    /// </summary>
+    internal virtual void ResyncSession() { }
+
     /// <summary>Re-read the state from Windows. Never throws.</summary>
     public void Refresh()
     {
@@ -167,6 +187,12 @@ public abstract class Tweak : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Raised after a successful change, on the UI thread. The window uses it to offer the
+    /// Explorer restart that cards such as the context menu and taskbar alignment need.
+    /// </summary>
+    internal static event Action<Tweak>? Applied;
+
     private async Task ToggleAsync(bool enable)
     {
         IsBusy = true;
@@ -179,7 +205,11 @@ public abstract class Tweak : INotifyPropertyChanged
             var result = await ApplyAsync(enable).ConfigureAwait(true);
             Journal.Write($"{Title} · {result.Message}", result.Ok);
             if (!result.Ok) State = enable ? TweakState.Off : TweakState.On;
-            else Refresh();
+            else
+            {
+                Refresh();
+                Applied?.Invoke(this);
+            }
         }
         catch (Exception ex)
         {
