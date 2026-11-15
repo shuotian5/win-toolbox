@@ -1,0 +1,178 @@
+<Window x:Class="WinToolbox.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WinToolbox"
+        Title="WinToolbox"
+        Width="1060" Height="740" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBgBrush}"
+        FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <local:NullOrEmptyToVisibilityConverter x:Key="NotEmpty" />
+        <local:KindToVisibilityConverter x:Key="KindConv" />
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="18,15" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#CBD4E1" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="CardTemplate">
+            <Border Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="12.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,28,0"
+                                   LineHeight="19" />
+                        <TextBlock Text="{Binding Hint}" FontSize="11.5" Margin="0,7,0,0"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding Hint, Converter={StaticResource NotEmpty}}" />
+                        <Border Background="{StaticResource WarningBgBrush}"
+                                BorderBrush="{StaticResource WarningBorderBrush}" BorderThickness="1"
+                                CornerRadius="6" Padding="10,7" Margin="0,10,28,0"
+                                Visibility="{Binding Warning, Converter={StaticResource NotEmpty}}">
+                            <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="11.5"
+                                       Foreground="{StaticResource WarningTextBrush}" LineHeight="17" />
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top" MinWidth="78">
+                        <CheckBox Style="{StaticResource ToggleSwitchStyle}"
+                                  HorizontalAlignment="Right"
+                                  IsChecked="{Binding IsOn, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanInteract}"
+                                  Visibility="{Binding Kind, Converter={StaticResource KindConv}, ConverterParameter=toggle}" />
+                        <Button Content="{Binding ActionLabel}" Style="{StaticResource GhostButtonStyle}"
+                                HorizontalAlignment="Right" Click="ActionButton_Click"
+                                IsEnabled="{Binding CanInteract}"
+                                Visibility="{Binding Kind, Converter={StaticResource KindConv}, ConverterParameter=action}" />
+                        <TextBlock Text="{Binding StatusText}" FontSize="10.5" Margin="0,7,0,0"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding Kind, Converter={StaticResource KindConv}, ConverterParameter=toggle}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="234" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================================================ sidebar -->
+        <Border Background="{StaticResource SidebarBgBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Margin="22,26,22,20">
+                    <TextBlock Text="WinToolbox" Foreground="White" FontSize="17" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TaglineText" Foreground="#6E7A8F" FontSize="11.5" Margin="0,5,0,0" />
+                </StackPanel>
+
+                <ListBox x:Name="NavList" Grid.Row="1"
+                         ItemsSource="{Binding NavItems}"
+                         ItemContainerStyle="{StaticResource NavItemStyle}"
+                         SelectionChanged="NavList_SelectionChanged"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+
+                <StackPanel Grid.Row="2" Margin="22,10,22,20">
+                    <TextBlock x:Name="AdminBadge" FontSize="11" Foreground="#7FA6E8" />
+                    <TextBlock x:Name="VersionText" FontSize="10.5" Foreground="#4E5A6E" Margin="0,6,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- =============================================================== main -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- header -->
+            <Grid Margin="28,24,28,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock x:Name="HeaderTitle" FontSize="20" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                    <TextBlock x:Name="HeaderSubtitle" FontSize="12.5" Margin="0,5,0,0"
+                               Foreground="{StaticResource TextSecondaryBrush}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Grid Width="182" Height="36">
+                        <TextBox x:Name="SearchBox" Style="{StaticResource SearchBoxStyle}"
+                                 VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged" />
+                        <TextBlock x:Name="SearchPlaceholder" Margin="12,0,0,0" FontSize="12.5"
+                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding Text, ElementName=SearchBox, Converter={StaticResource NotEmpty}, ConverterParameter=invert}" />
+                    </Grid>
+                    <Button x:Name="RestoreButton" Content="全部还原" Style="{StaticResource GhostButtonStyle}"
+                            Height="36" Padding="16,0" Margin="10,0,0,0" Click="RestoreAll_Click" />
+                </StackPanel>
+            </Grid>
+
+            <!-- cards -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="28,0,20,0">
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding Visible}" ItemTemplate="{StaticResource CardTemplate}" />
+                    <TextBlock x:Name="EmptyHint" Visibility="Collapsed" Margin="4,30,0,0"
+                               FontSize="13" Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- footer -->
+            <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource DividerBrush}"
+                    BorderThickness="0,1,0,0" Padding="28,11">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StatusLine" FontSize="11.5" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock x:Name="BackupLine" FontSize="11.5" VerticalAlignment="Center"
+                                   Margin="0,0,14,0" Foreground="{StaticResource TextMutedBrush}" />
+                        <Button x:Name="ReloadButton" Style="{StaticResource GhostButtonStyle}"
+                                Padding="11,5" Click="Reload_Click" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
